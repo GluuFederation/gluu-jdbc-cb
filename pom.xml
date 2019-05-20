@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>org.gluu.jdbc</groupId>
-	<artifactId>gluu-jdbc-n1ql</artifactId>
+	<artifactId>jdbc-n1ql</artifactId>
 	<version>1.0.0.Final</version>
 
 	<packaging>jar</packaging>
