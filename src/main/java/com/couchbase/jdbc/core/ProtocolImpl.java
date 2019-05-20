@@ -338,7 +338,7 @@ public class ProtocolImpl implements Protocol
 
         for(String parameter:parameters.keySet())
         {
-            parms.add(new BasicNameValuePair(parameter,parameters.get(parameter)));
+            parms.add(new BasicNameValuePair(parameter, String.valueOf(parameters.get(parameter))));
         }
 
 
