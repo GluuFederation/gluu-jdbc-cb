@@ -117,4 +117,9 @@ public class Cluster
             numInstances.decrementAndGet();
         }
     }
+	public List<Instance> getEndpoints() {
+		return endpoints;
+	}
+    
+    
 }

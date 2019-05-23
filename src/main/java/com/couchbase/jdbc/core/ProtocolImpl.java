@@ -22,6 +22,7 @@ import com.couchbase.jdbc.connect.Protocol;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.NameValuePair;
+import org.apache.http.auth.AuthScheme;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.AuthCache;
@@ -48,6 +49,7 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.boon.core.reflection.MapObjectConversion;
 import org.boon.json.JsonFactory;
@@ -154,7 +156,7 @@ public class ProtocolImpl implements Protocol
 
     private RequestConfig requestConfig;
 	private BasicCredentialsProvider credsProvider;
-	private HttpClientContext сlientContext;
+	private HttpClientContext httpContext;
 
     public ProtocolImpl(String url, Properties props)
     {
@@ -175,24 +177,13 @@ public class ProtocolImpl implements Protocol
 		if ((user != null) && (password != null)) {
 			this.credsProvider = new BasicCredentialsProvider();
 			credsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(user, password));
-
-			logger.trace("Using endpoint {}", url);
-            URI uri = null;
-            try
-            {
-                uri = new URI(url);
-            } catch (URISyntaxException ex) {
-                logger.error("Invalid request {}", url);
-            }
             
-            HttpHost targetHost = new HttpHost(uri.getHost());
             AuthCache authCache = new BasicAuthCache();
-            authCache.put(targetHost, new BasicScheme());
             
             // Add AuthCache to the execution context
-            сlientContext = HttpClientContext.create();
-            сlientContext.setCredentialsProvider(credsProvider);
-            сlientContext.setAuthCache(authCache);
+            httpContext = HttpClientContext.create();
+            httpContext.setCredentialsProvider(credsProvider);
+            httpContext.setAuthCache(authCache);
 		}
 
 		this.url = url;
@@ -206,7 +197,6 @@ public class ProtocolImpl implements Protocol
                 .setConnectionRequestTimeout(0)
                 .setConnectTimeout(connectTimeout)
                 .setSocketTimeout(connectTimeout)
-                .setAuthenticationEnabled(this.сlientContext != null)
                 .build();
 
         if (props.containsKey(ConnectionParameters.ENABLE_SSL) && props.getProperty(ConnectionParameters.ENABLE_SSL).equals("true"))
@@ -398,7 +388,7 @@ public class ProtocolImpl implements Protocol
             logger.trace("Get request {}", httpGet.toString());
 
             try {
-                CloseableHttpResponse response = httpClient.execute(httpGet, сlientContext);
+                CloseableHttpResponse response = httpClient.execute(httpGet, httpContext);
 
                 return new CBResultSet(statement, handleResponse(sql, response));
 
@@ -652,7 +642,7 @@ public class ProtocolImpl implements Protocol
 
                 httpPost.setEntity(entity);
 
-                CloseableHttpResponse response = httpClient.execute(httpPost);
+                CloseableHttpResponse response = httpClient.execute(httpPost, httpContext);
 
                 return handleResponse(query, response);
 
@@ -677,7 +667,7 @@ public class ProtocolImpl implements Protocol
         }
     }
 
-    public boolean execute(CBStatement statement, String query) throws SQLException
+	public boolean execute(CBStatement statement, String query) throws SQLException
     {
         try
         {
@@ -756,7 +746,7 @@ public class ProtocolImpl implements Protocol
                 parameters.put(STATEMENT, query);
             }
 
-            CloseableHttpResponse response = httpClient.execute(httpPost);
+            CloseableHttpResponse response = httpClient.execute(httpPost, httpContext);
             int status = response.getStatusLine().getStatusCode();
 
             if ( status >= 200 && status < 300 )
@@ -983,8 +973,9 @@ public class ProtocolImpl implements Protocol
 
         this.cluster = cluster;
 
-        clusterSynch.set(true);
+        rebuildAuthCache();
 
+        clusterSynch.set(true);
     }
 
     public Instance getNextEndpoint()
@@ -1011,7 +1002,7 @@ public class ProtocolImpl implements Protocol
 
         try
         {
-            CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
+            CloseableHttpResponse httpResponse = httpClient.execute(httpGet, httpContext);
 
             setCluster(handleClusterResponse(httpResponse));
         }
@@ -1022,10 +1013,56 @@ public class ProtocolImpl implements Protocol
             throw new SQLException("Error getting cluster response", ex);}
 
     }
-    
-    public static void main(String[] args) {
-		
+
+	private void rebuildAuthCache() {
+		AuthCache authCache = httpContext.getAuthCache();
+		authCache.clear();
+
+		for (Instance endPoint : cluster.getEndpoints()) {
+			String url = endPoint.getEndpointURL(ssl);
+
+			logger.trace("Using endpoint {}", url);
+			URI uri = null;
+			try {
+				uri = new URI(url);
+			} catch (URISyntaxException ex) {
+				logger.error("Invalid endpoint {}", url);
+			}
+
+			HttpHost targetHost = new HttpHost(uri.getHost(), uri.getPort(), uri.getScheme());
+			authCache.put(targetHost, new BasicScheme());
+		}
 	}
+/*
+    public static void main(String[] args) throws ClientProtocolException, IOException, SQLException {
+    	Properties prop = new Properties();
+    	prop.put("user", "admin");
+    	prop.put("password", "test");
+    	prop.put("EnableSSL", "true");
+    	ProtocolImpl p = new ProtocolImpl("http://localhost", prop);
+    	
+    	String uri = "https://localhost:18093/query/service?readonly=true&statement=select+doc.*+from+%60gluu_user%60+doc+where+%28%28uid+%3D+%22mbaser%22%29+OR+%28%22mbaser%22+IN+uid%29%29+OR+%28%28mail+%3D+%22mbaser%22%29+OR+%28%22mbaser%22+IN+mail%29%29&encoding=UTF-8&timeout=5000s&scan_consistency=not_bounded";
+        HttpGet httpGet = new HttpGet(uri);
+
+        httpGet.setHeader("Accept", "application/json");
+		String url = "https://localhost:18093";
+
+		URI uri2 = null;
+		try {
+			uri2 = new URI(url);
+		} catch (URISyntaxException ex) {
+		}
+
+		HttpHost targetHost = new HttpHost(uri2.getHost(), uri2.getPort(), uri2.getScheme());
+		p.httpContext.getAuthCache().put(targetHost, new BasicScheme());
+
+		
+        CloseableHttpResponse response = p.httpClient.execute(httpGet, p.httpContext);
+        CouchResponse resp = p.handleResponse("", response);
+        System.out.println(resp);
+        System.out.println(response.getEntity());
+	}
+*/
 }
 
 
