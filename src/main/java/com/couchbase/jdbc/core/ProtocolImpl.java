@@ -20,9 +20,11 @@ import com.couchbase.jdbc.connect.Instance;
 import com.couchbase.jdbc.connect.Protocol;
 
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHost;
 import org.apache.http.NameValuePair;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.AuthCache;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -38,6 +40,8 @@ import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.ssl.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.auth.BasicScheme;
+import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -171,8 +175,27 @@ public class ProtocolImpl implements Protocol
 		if ((user != null) && (password != null)) {
 			this.credsProvider = new BasicCredentialsProvider();
 			credsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(user, password));
+
+			logger.trace("Using endpoint {}", url);
+            URI uri = null;
+            try
+            {
+                uri = new URI(url);
+            } catch (URISyntaxException ex) {
+                logger.error("Invalid request {}", url);
+            }
+            
+            HttpHost targetHost = new HttpHost(uri.getHost());
+            AuthCache authCache = new BasicAuthCache();
+            authCache.put(targetHost, new BasicScheme());
+            
+            // Add AuthCache to the execution context
+            сlientContext = HttpClientContext.create();
+            сlientContext.setCredentialsProvider(credsProvider);
+            сlientContext.setAuthCache(authCache);
 		}
-        this.url = url;
+
+		this.url = url;
         setConnectionTimeout(props.getProperty(ConnectionParameters.CONNECTION_TIMEOUT));
         if (props.containsKey(ConnectionParameters.SCAN_CONSISTENCY))
         {
@@ -228,9 +251,6 @@ public class ProtocolImpl implements Protocol
                         .build();
                 HttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(socketFactoryRegistry);
                 HttpClientBuilder httpClientBuilder = HttpClients.custom().setConnectionManager(cm).setDefaultRequestConfig(requestConfig);
-                if (credsProvider != null) {
-                	httpClientBuilder.setDefaultCredentialsProvider(credsProvider);
-                }
                 httpClient = httpClientBuilder.build();
                 ssl=true;
 
@@ -245,9 +265,6 @@ public class ProtocolImpl implements Protocol
         else
         {
         	HttpClientBuilder httpClientBuilder = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig);
-            if (credsProvider != null) {
-            	httpClientBuilder.setDefaultCredentialsProvider(credsProvider);
-            }
             httpClient = httpClientBuilder.build();
         }
     }
@@ -1005,6 +1022,10 @@ public class ProtocolImpl implements Protocol
             throw new SQLException("Error getting cluster response", ex);}
 
     }
+    
+    public static void main(String[] args) {
+		
+	}
 }
 
 
