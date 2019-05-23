@@ -21,11 +21,14 @@ import com.couchbase.jdbc.connect.Protocol;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.NameValuePair;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
@@ -35,6 +38,7 @@ import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.ssl.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
@@ -144,7 +148,9 @@ public class ProtocolImpl implements Protocol
 
     CloseableHttpClient httpClient;
 
-    RequestConfig requestConfig;
+    private RequestConfig requestConfig;
+	private BasicCredentialsProvider credsProvider;
+	private HttpClientContext сlientContext;
 
     public ProtocolImpl(String url, Properties props)
     {
@@ -161,6 +167,11 @@ public class ProtocolImpl implements Protocol
         {
             credentials = props.getProperty("credentials");
         }
+
+		if ((user != null) && (password != null)) {
+			this.credsProvider = new BasicCredentialsProvider();
+			credsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(user, password));
+		}
         this.url = url;
         setConnectionTimeout(props.getProperty(ConnectionParameters.CONNECTION_TIMEOUT));
         if (props.containsKey(ConnectionParameters.SCAN_CONSISTENCY))
@@ -172,6 +183,7 @@ public class ProtocolImpl implements Protocol
                 .setConnectionRequestTimeout(0)
                 .setConnectTimeout(connectTimeout)
                 .setSocketTimeout(connectTimeout)
+                .setAuthenticationEnabled(this.сlientContext != null)
                 .build();
 
         if (props.containsKey(ConnectionParameters.ENABLE_SSL) && props.getProperty(ConnectionParameters.ENABLE_SSL).equals("true"))
@@ -215,7 +227,11 @@ public class ProtocolImpl implements Protocol
                         .<ConnectionSocketFactory> create().register("https", sslsf)
                         .build();
                 HttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(socketFactoryRegistry);
-                httpClient = HttpClients.custom().setConnectionManager(cm).setDefaultRequestConfig(requestConfig).build();
+                HttpClientBuilder httpClientBuilder = HttpClients.custom().setConnectionManager(cm).setDefaultRequestConfig(requestConfig);
+                if (credsProvider != null) {
+                	httpClientBuilder.setDefaultCredentialsProvider(credsProvider);
+                }
+                httpClient = httpClientBuilder.build();
                 ssl=true;
 
             }catch (Exception ex)
@@ -228,7 +244,11 @@ public class ProtocolImpl implements Protocol
         }
         else
         {
-            httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
+        	HttpClientBuilder httpClientBuilder = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig);
+            if (credsProvider != null) {
+            	httpClientBuilder.setDefaultCredentialsProvider(credsProvider);
+            }
+            httpClient = httpClientBuilder.build();
         }
     }
 
@@ -361,8 +381,8 @@ public class ProtocolImpl implements Protocol
             logger.trace("Get request {}", httpGet.toString());
 
             try {
+                CloseableHttpResponse response = httpClient.execute(httpGet, сlientContext);
 
-                CloseableHttpResponse response = httpClient.execute(httpGet);
                 return new CBResultSet(statement, handleResponse(sql, response));
 
             } catch (ConnectTimeoutException cte)
