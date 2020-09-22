@@ -318,7 +318,7 @@ public class ProtocolImpl implements Protocol
         logger.trace ("Cluster response {}", string);
 
         // has to be an object here since we can get a 404 back which is a string
-        Object jsonArray = gson.fromJson(string, listOfMap);
+        Object jsonArray = gson.fromJson(string, List.class);
 
         String message="";
 
@@ -1073,6 +1073,15 @@ public class ProtocolImpl implements Protocol
         System.out.println(response.getEntity());
 	}
 */
+	
+	public static void main(String[] args) {
+		Gson gson = new Gson();
+		String string = "[{\"cluster\":\"default\",\"name\":\"127.0.0.1:8091\",\"queryEndpoint\":\"http://127.0.0.1:8093/query/service\",\"adminEndpoint\":\"http://127.0.0.1:8093/admin\",\"querySecure\":\"https://127.0.0.1:18093/query/service\",\"adminSecure\":\"https://127.0.0.1:18093/admin\",\"options\":null}]";
+//		Type listOfMap = new TypeToken<Map<String, List<Map<String, String>>>>(){}.getType();
+        Object jsonArray = gson.fromJson(string, List.class);
+        System.out.println(jsonArray);
+
+	}
 }
 
 
