@@ -11,26 +11,51 @@
 
 package com.couchbase.jdbc;
 
-import com.couchbase.json.SQLJSON;
-import org.boon.json.JsonFactory;
+import static org.junit.Assert.assertThat;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Date;
+import java.sql.NClob;
+import java.sql.ParameterMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TimeZone;
+
 import org.hamcrest.core.IsEqual;
-import org.junit.*;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.junit.After;
-import java.io.*;
-import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 
-import com.couchbase.jdbc.CBArray;
-import com.couchbase.jdbc.CBResultSet;
-
-import java.sql.*;
-import java.sql.Date;
-import java.util.*;
-
-import static org.junit.Assert.*;
+import com.couchbase.json.SQLJSON;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 @RunWith(JUnit4.class)
 public class PreparedStatementTest extends CouchBaseTestCase
@@ -113,15 +138,16 @@ public class PreparedStatementTest extends CouchBaseTestCase
     @Test
     public void testN1QLSpecific() throws Exception
     {
+    	Gson gson = new Gson();
         String jsonString = "{ \"age\": 56, \"children\": [ { \"age\": 17, \"fname\": \"Abama\", \"gender\": \"m\"}," +
          "{ \"age\": 21, \"fname\": \"Bebama\", \"gender\": \"m\" } ]," +
          "\"email\": \"ian@gmail.com\", \"fname\": \"Ian\" }";
 
-        Object jsonObject = JsonFactory.fromJson(new StringReader(jsonString));
+        Object jsonObject = gson.fromJson(new StringReader(jsonString), Map.class);
 
         String jsonString2 = "{ \"age\": 56," +
                 "\"email\": \"ian@gmail.com\", \"fname\": \"Ian\" }";
-        Object jsonObject2 = JsonFactory.fromJson(new StringReader(jsonString2));
+        Object jsonObject2 = gson.fromJson(new StringReader(jsonString2), Map.class);
 
         try (PreparedStatement preparedStatement = con.prepareStatement("insert into default (key,value) values(?,?)"))
         {
@@ -186,25 +212,26 @@ public class PreparedStatementTest extends CouchBaseTestCase
 
         try (PreparedStatement preparedStatement = con.prepareStatement("insert into default(key,value) values (?,?)"))
         {
-            Map <String, String> jsonObject = (Map <String, String>)JsonFactory.fromJson(new StringReader(name1));
+        	Gson gson = new Gson(); 
+            Map <String, String> jsonObject = (Map <String, String>)gson.fromJson(new StringReader(name1), Map.class);
             preparedStatement.setString(1,"name");
             preparedStatement.setString(2, jsonObject.get("name"));
 
             assertEquals(1, preparedStatement.executeUpdate());
 
-            jsonObject = (Map <String, String>)JsonFactory.fromJson(new StringReader(name2));
+            jsonObject = (Map <String, String>)gson.fromJson(new StringReader(name2), Map.class);
             preparedStatement.setString(1,"name1");
             preparedStatement.setString(2, jsonObject.get("name"));
 
             assertEquals(1, preparedStatement.executeUpdate());
 
-            jsonObject = (Map <String, String>)JsonFactory.fromJson(new StringReader(name3));
+            jsonObject = (Map <String, String>)gson.fromJson(new StringReader(name3), Map.class);
             preparedStatement.setString(1,"name2");
             preparedStatement.setString(2, jsonObject.get("name"));
 
             assertEquals(1, preparedStatement.executeUpdate());
 
-            jsonObject = (Map <String, String>)JsonFactory.fromJson(new StringReader(name4));
+            jsonObject = (Map <String, String>)gson.fromJson(new StringReader(name4), Map.class);
             preparedStatement.setString(1,"name3");
             preparedStatement.setString(2, jsonObject.get("name"));
 
@@ -638,7 +665,9 @@ public class PreparedStatementTest extends CouchBaseTestCase
                 try (ResultSet rs = statement.executeQuery("select * from default where meta(default).id='val1'"))
                 {
                     assertTrue(rs.next());
-                    List testArray = JsonFactory.fromJsonArray(((CBArray) rs.getArray("default")).getJsonArray(), TestUser.class);
+                	Gson gson = new Gson();
+                    Type listOfTestUser = new TypeToken<List<TestUser>>(){}.getType();
+                    List<TestUser> testArray = gson.fromJson(gson.toJsonTree(((CBArray) rs.getArray("default")).getJsonArray()), listOfTestUser);
 
                     Assert.assertThat(arrayList,IsEqual.equalTo(testArray));
                 }

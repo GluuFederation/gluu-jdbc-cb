@@ -1,20 +1,33 @@
 package com.couchbase.jdbc.core;
 
-import com.couchbase.jdbc.util.JSONTypes;
-import com.couchbase.jdbc.util.TimestampUtils;
-import com.couchbase.json.SQLJSON;
-import org.boon.core.reflection.Mapper;
-import org.boon.core.reflection.MapperSimple;
-import org.boon.core.value.ValueList;
-import org.boon.json.JsonFactory;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.Reader;
+import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Type;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.SQLException;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.AbstractList;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.*;
-import java.util.*;
+import com.couchbase.jdbc.util.JSONTypes;
+import com.couchbase.jdbc.util.TimestampUtils;
+import com.couchbase.json.SQLJSON;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 /**
  * Created by davec on 15-07-02.
@@ -28,7 +41,7 @@ public class SqlJsonImplementation implements SQLJSON
     boolean isNull = false;
     TimestampUtils timestampUtils = new TimestampUtils();
 
-
+    private Gson gson = new Gson();
 
     public SqlJsonImplementation()
     {
@@ -62,7 +75,7 @@ public class SqlJsonImplementation implements SQLJSON
     {
         if (sqlJson == null )
         {
-            sqlJson = JsonFactory.toJson(jsonObject);
+            sqlJson = gson.toJson(jsonObject);
         }
 
     }
@@ -815,7 +828,7 @@ public class SqlJsonImplementation implements SQLJSON
         else
         {
             // this is a hack
-            List backingList = ((ValueList) jsonObject).list();
+            List backingList = (List) jsonObject;
             //noinspection unchecked
             backingList.set(index,object);
         }
@@ -850,9 +863,8 @@ public class SqlJsonImplementation implements SQLJSON
     @Override
     public Object parse(Class clazz)
     {
-        Mapper mapper = new MapperSimple();
         //noinspection unchecked
-        mapper.fromMap((Map)jsonObject,clazz);
+        gson.fromJson(gson.toJsonTree(jsonObject), clazz);
         return null;
     }
 
@@ -956,4 +968,32 @@ public class SqlJsonImplementation implements SQLJSON
         logger.debug("should not get here");
         return 0;
     }
+    
+    public static void main(String[] args) {
+    	String json = "{\r\n" + 
+    			"    \"retval\": [\r\n" + 
+    			"        {\r\n" + 
+    			"            \"DocumentEntityCD\": \"AccOperation\",\r\n" + 
+    			"            \"DocumentType\": \"Document Accounting operation\",\r\n" + 
+    			"            \"DocNumber\": \"12345\",\r\n" + 
+    			"            \"DebitAccountCode\": \"201\",\r\n" + 
+    			"            \"CreditAccountCode\": \"201\",\r\n" + 
+    			"            \"Amount\": 75.5\r\n" + 
+    			"        },\r\n" + 
+    			"        {\r\n" + 
+    			"            \"GeneralJournalID\": \"5NE5DsWHo0GD_VkiJO_a1Q\",\r\n" + 
+    			"            \"DocumentUID\": \"sV6Pqw-_CkuAtiZsuzZNcA\",\r\n" + 
+    			"            \"Date\": \"2012051521\",\r\n" + 
+    			"            \"DocumentEntityCD\": \"AccOperation\",\r\n" + 
+    			"            \"DocumentType\": \"Document Accounting operation\",\r\n" + 
+    			"            \"Amount\": 555\r\n" + 
+    			"        }\r\n" + 
+    			"    ],\r\n" + 
+    			"    \"time\": 0\r\n" + 
+    			"}";
+    	final Type typeOf = new TypeToken<Map<String, List<Map<String,String>>>>(){}.getType();
+		Gson gson = new Gson();
+		List list = gson.fromJson(json, typeOf);
+		System.out.println(list);
+	}
 }

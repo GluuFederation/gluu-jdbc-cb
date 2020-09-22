@@ -11,10 +11,10 @@
 
 package com.couchbase.jdbc.util;
 
-import org.boon.json.JsonFactory;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import com.google.gson.Gson;
 
 /**
  * Created by davec on 2015-05-12.
@@ -23,6 +23,7 @@ public class Credentials
 {
 
     List <Credential> credentials = new ArrayList<Credential>();
+    private Gson gson = new Gson();
 
     public  Credentials()
     {
@@ -47,6 +48,6 @@ public class Credentials
     }
     public String toString()
     {
-        return JsonFactory.toJson(credentials);
+        return gson.toJson(credentials);
     }
 }

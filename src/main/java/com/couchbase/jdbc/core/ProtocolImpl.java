@@ -12,17 +12,32 @@
 package com.couchbase.jdbc.core;
 
 
-import com.couchbase.jdbc.CBResultSet;
-import com.couchbase.jdbc.CBStatement;
-import com.couchbase.jdbc.ConnectionParameters;
-import com.couchbase.jdbc.connect.Cluster;
-import com.couchbase.jdbc.connect.Instance;
-import com.couchbase.jdbc.connect.Protocol;
+import java.io.IOException;
+import java.lang.reflect.Type;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.sql.SQLException;
+import java.sql.SQLWarning;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpHost;
 import org.apache.http.NameValuePair;
-import org.apache.http.auth.AuthScheme;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.AuthCache;
@@ -38,7 +53,11 @@ import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.conn.HttpClientConnectionManager;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
-import org.apache.http.conn.ssl.*;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLContextBuilder;
+import org.apache.http.conn.ssl.SSLContexts;
+import org.apache.http.conn.ssl.TrustStrategy;
+import org.apache.http.conn.ssl.X509HostnameVerifier;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.auth.BasicScheme;
@@ -49,29 +68,18 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.message.BasicNameValuePair;
-import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
-import org.boon.core.reflection.MapObjectConversion;
-import org.boon.json.JsonFactory;
-import org.boon.json.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocket;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.sql.SQLException;
-import java.sql.SQLWarning;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import com.couchbase.jdbc.CBResultSet;
+import com.couchbase.jdbc.CBStatement;
+import com.couchbase.jdbc.ConnectionParameters;
+import com.couchbase.jdbc.connect.Cluster;
+import com.couchbase.jdbc.connect.Instance;
+import com.couchbase.jdbc.connect.Protocol;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 /**
  * Created by davec on 2015-02-22.
@@ -95,6 +103,9 @@ public class ProtocolImpl implements Protocol
     private static final int N1QL_TIMEOUT = 4;
     private static final int N1QL_FATAL = 5;
 
+    private Gson gson = new Gson();
+    private Type listOfMap = new TypeToken<Map<String, List<Map<String, Object>>>>(){}.getType();
+    private Type listOfCouchError = new TypeToken<List<CouchError>>(){}.getType();
 
     static final Map <String,Integer> statusStrings = new HashMap<String,Integer>();
     static {
@@ -305,10 +316,9 @@ public class ProtocolImpl implements Protocol
         HttpEntity entity = response.getEntity();
         String string = EntityUtils.toString(entity);
         logger.trace ("Cluster response {}", string);
-        ObjectMapper mapper = JsonFactory.create();
 
         // has to be an object here since we can get a 404 back which is a string
-        Object jsonArray = mapper.fromJson(string);
+        Object jsonArray = gson.fromJson(string, listOfMap);
 
         String message="";
 
@@ -431,15 +441,12 @@ public class ProtocolImpl implements Protocol
         int status = response.getStatusLine().getStatusCode();
         HttpEntity entity = response.getEntity();
 
-
-        ObjectMapper mapper = JsonFactory.create();
-
         CouchResponse couchResponse = new CouchResponse();
 
         String strResponse = EntityUtils.toString(entity);
 //        logger.trace( "Response to query {} {}", sql, strResponse );
 
-        Object foo = mapper.readValue(strResponse, Map.class);
+        Object foo = gson.fromJson(strResponse, Map.class);
         Map<String, Object> rootAsMap = null;
         if (foo instanceof Map)
         {
@@ -486,18 +493,18 @@ public class ProtocolImpl implements Protocol
             throw new SQLException("Error reading signature" + signature );
         }
         //noinspection unchecked
-        couchResponse.metrics   = MapObjectConversion.fromMap((Map)rootAsMap.get("metrics"), CouchMetrics.class);
+        couchResponse.metrics   = gson.fromJson(gson.toJsonTree((Map)rootAsMap.get("metrics")), CouchMetrics.class);
         List errorList = (List)rootAsMap.get("errors");
         if ( errorList != null )
         {
             //noinspection unchecked,unchecked
-            couchResponse.errors    = MapObjectConversion.convertListOfMapsToObjects(CouchError.class, errorList);
+            couchResponse.errors  = gson.fromJson(gson.toJsonTree(errorList), listOfCouchError);
         }
         List  warningList = (List)rootAsMap.get("warnings");
         if ( warningList != null )
         {
             //noinspection unchecked,unchecked
-            couchResponse.warnings  = MapObjectConversion.convertListOfMapsToObjects(CouchError.class, warningList );
+            couchResponse.warnings  = gson.fromJson(gson.toJsonTree(warningList), listOfCouchError);
 
             for (CouchError warning : couchResponse.warnings)
             {
@@ -636,7 +643,7 @@ public class ProtocolImpl implements Protocol
                 addOptions(queryParameters);
 
 
-                String jsonParameters = JsonFactory.toJson(queryParameters);
+                String jsonParameters = gson.toJson(queryParameters);
                 StringEntity entity = new StringEntity(jsonParameters, ContentType.APPLICATION_JSON);
 
 
@@ -752,8 +759,11 @@ public class ProtocolImpl implements Protocol
             if ( status >= 200 && status < 300 )
             {
                 HttpEntity entity = response.getEntity();
-                ObjectMapper mapper = JsonFactory.create();
-                @SuppressWarnings("unchecked") Map <String,Object> jsonObject = (Map)mapper.fromJson(EntityUtils.toString(entity));
+                String string = EntityUtils.toString(entity);
+                logger.trace ("Batch response {}", string);
+
+                // has to be an object here since we can get a 404 back which is a string
+                Map <String,Object> jsonObject = gson.fromJson(string, listOfMap);
 
                 String statusString = (String)jsonObject.get("status");
 

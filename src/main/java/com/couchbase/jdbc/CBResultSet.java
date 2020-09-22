@@ -12,25 +12,50 @@
 
 package com.couchbase.jdbc;
 
+import java.io.ByteArrayInputStream;
+import java.io.CharArrayReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
+import java.io.UnsupportedEncodingException;
+import java.math.BigDecimal;
+import java.net.URL;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
+import java.sql.Date;
+import java.sql.NClob;
+import java.sql.Ref;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.RowId;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLType;
+import java.sql.SQLWarning;
+import java.sql.SQLXML;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.couchbase.jdbc.core.CouchError;
 import com.couchbase.jdbc.core.CouchResponse;
 import com.couchbase.jdbc.core.Field;
 import com.couchbase.jdbc.core.SqlJsonImplementation;
 import com.couchbase.jdbc.util.TimestampUtils;
 import com.couchbase.json.SQLJSON;
-import org.boon.json.JsonFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.*;
-import java.math.BigDecimal;
-import java.net.URL;
-import java.sql.*;
-import java.sql.Date;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import com.google.gson.Gson;
 
 /**
  * Created by davec on 2015-02-20.
@@ -51,6 +76,8 @@ public class CBResultSet implements java.sql.ResultSet
     List <Field> fields = new ArrayList<Field>();
 
     private final TimestampUtils timestampUtils = new TimestampUtils();
+    
+    private Gson gson = new Gson();
 
     public CBResultSet(Statement statement, CouchResponse response)
     {
@@ -623,7 +650,7 @@ public class CBResultSet implements java.sql.ResultSet
 
         if (object instanceof  Map)
         {
-            return JsonFactory.toJson(object);
+			return gson.toJson(object);
         }
         else
         {

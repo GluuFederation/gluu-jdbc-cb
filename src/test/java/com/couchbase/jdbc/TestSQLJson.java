@@ -11,26 +11,31 @@
 
 package com.couchbase.jdbc;
 
-import com.couchbase.json.SQLJSON;
-import org.boon.json.JsonFactory;
-import org.boon.json.ObjectMapper;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.After;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.junit.After;
-import org.junit.Ignore;
 
-import java.math.BigDecimal;
-
-import com.couchbase.jdbc.CBConnection;
-import com.couchbase.jdbc.CBPreparedStatement;
-import com.couchbase.jdbc.CBResultSet;
-
-import java.sql.*;
-import java.sql.Date;
-import java.util.*;
+import com.couchbase.json.SQLJSON;
+import com.google.gson.Gson;
 
 /**
  * Created by davec on 2015-07-10.
@@ -88,8 +93,8 @@ public class TestSQLJson extends CouchBaseTestCase
                 "  \"customerId\": \"customer10\"\n" +
                 "}";
 
-        ObjectMapper mapper = JsonFactory.create();
-        Map <String,Object> jsonObject = mapper.readValue(json, Map.class);
+    	Gson gson = new Gson();
+        Map jsonObject = gson.fromJson(json, Map.class);
 
         String query = "insert into default (key,value) values (?,?)";
 

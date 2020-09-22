@@ -11,25 +11,23 @@
 
 package com.couchbase.jdbc;
 
-import com.couchbase.jdbc.CBConnection;
-import com.couchbase.jdbc.ConnectionParameters;
-import com.couchbase.jdbc.connect.Cluster;
-import com.couchbase.jdbc.core.ProtocolImpl;
-import junit.framework.TestCase;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
+import java.util.Map;
+import java.util.Properties;
 
-import org.boon.json.JsonFactory;
-import org.boon.json.ObjectMapper;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
-import java.util.Map;
-import java.util.Properties;
+import com.couchbase.jdbc.connect.Cluster;
+import com.couchbase.jdbc.core.ProtocolImpl;
+import com.google.gson.Gson;
+
+import junit.framework.TestCase;
 
 /**
  * Created by davec on 2015-09-02.
@@ -66,8 +64,9 @@ public class ClusterTest extends TestCase
         String endpoint = "{\"cluster\":\"default\",\"name\":\"10.168.209.119\",\"queryEndpoint\":\"http://10.168.209.119:8093/query/service\"," +
                 "\"adminEndpoint\":\"http://10.168.209.119:8093/admin\",\"options\":null}";
 
-        ObjectMapper mapper = JsonFactory.create();
-        Map <String,Object> instanceEndpoint = (Map)mapper.fromJson(endpoint);
+        Gson gson = new Gson();
+        
+        Map <String,Object> instanceEndpoint = gson.fromJson(endpoint, Map.class);
 
         cluster.addEndPoint(instanceEndpoint);
 

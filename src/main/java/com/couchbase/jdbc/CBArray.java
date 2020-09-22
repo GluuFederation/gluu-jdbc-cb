@@ -11,22 +11,33 @@
 
 package com.couchbase.jdbc;
 
-import org.boon.json.JsonFactory;
-
-import java.sql.*;
+import java.sql.Array;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Types;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.gson.Gson;
 
 /**
  * Created by davec on 2015-07-21.
  */
 public class CBArray implements Array
 {
+	private static final Logger logger = LoggerFactory.getLogger(CBArray.class);
+
     private String baseType;
     private Object []array;
     private String jsonArray;
+    
+    private Gson gson = new Gson();
 
     @SuppressWarnings("unchecked")
     private static final Map <String, String> typeMap = new <String, String> HashMap();
@@ -62,14 +73,15 @@ public class CBArray implements Array
         else
         {
             array = arrayList.toArray();
-            jsonArray = JsonFactory.toJson(array);
+			
+			jsonArray = gson.toJson(array);
         }
     }
     CBArray(String typeName, Object[] array)
     {
         this.array = array;
         baseType = typeName;
-        jsonArray = JsonFactory.toJson(array);
+		jsonArray = gson.toJson(array);
     }
     /**
      * Retrieves the SQL type name of the elements in
